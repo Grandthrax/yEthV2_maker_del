@@ -35,7 +35,7 @@ contract Strategy is BaseStrategy {
     address public jug = address(0x19c0976f590D67707E62397C87829d896Dc0f1F1);
 
     address public eth_price_oracle = address(0xCF63089A8aD2a9D8BD6Bb8022f3190EB7e1eD0f1);
-    address constant public yVaultDAI = address(0x9b142c2cdab89941e9dcd0b6c1cf6dea378a8d7c);
+    address constant public yVaultDAI = address(0x9B142C2CDAb89941E9dcd0B6C1cf6dEa378A8D7C);
 
     address constant public unirouter = address(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
 
@@ -64,22 +64,22 @@ contract Strategy is BaseStrategy {
     }
 
     function setBorrowCollateralizationRatio(uint _c) external {
-        require(msg.sender == governance, "!governance");
+        require(msg.sender == governance(), "!governance");
         c = _c;
     }
 
     function setWithdrawCollateralizationRatio(uint _c_safe) external {
-        require(msg.sender == governance, "!governance");
+        require(msg.sender == governance(), "!governance");
         c_safe = _c_safe;
     }
 
     function setBuffer(uint _buffer) external {
-        require(msg.sender == governance, "!governance");
+        require(msg.sender == governance(), "!governance");
         buffer = _buffer;
     }
 
     function setOracle(address _oracle) external {
-        require(msg.sender == governance, "!governance");
+        require(msg.sender == governance(), "!governance");
         eth_price_oracle = _oracle;
     }
 
@@ -91,7 +91,7 @@ contract Strategy is BaseStrategy {
         address _spot,
         address _jug
     ) external {
-        require(msg.sender == governance, "!governance");
+        require(msg.sender == governance(), "!governance");
         cdp_manager = _manager;
         vat = ManagerLike(_manager).vat();
         mcd_join_eth_a = _ethAdapter;
@@ -109,8 +109,8 @@ contract Strategy is BaseStrategy {
         IERC20(yVaultDAI).safeTransfer(_newStrategy, IERC20(yVaultDAI).balanceOf(address(this)));
     }
 
-    function allow(address dst) external {
-        require(msg.sender == governance, "!governance");
+    function allow(address dst) public {
+        require(msg.sender == governance(), "!governance");
         ManagerLike(cdp_manager).cdpAllow(cdpId, dst, 1);
     }
 
@@ -138,13 +138,13 @@ contract Strategy is BaseStrategy {
         uint _token = IERC20(want).balanceOf(address(this));
         if (_token > 0) {
             uint p = _getPrice();
-            uint _draw = _token.mul(p).mul(c_base).div(c).div(1e18);
+            uint _draw = _token.mul(p).mul(DENOMINATOR).div(c).div(1e18);
             // approve adapter to use token amount
             require(_checkDebtCeiling(_draw), "debt ceiling is reached!");
             _lockWETHAndDrawDAI(_token, _draw);
 
             // approve yVaultDAI use DAI
-            yVault(yVaultDAI).deposit(dai.balanceOf(address(this)));
+            yVault(yVaultDAI).deposit(IERC20(dai).balanceOf(address(this)));
         }
     }
 
@@ -215,9 +215,7 @@ contract Strategy is BaseStrategy {
     }
 
     function estimatedTotalAssets() public override view returns (uint256) {
-        uint ret = prepareReturn(0);
-        uint prin = balanceOfWant().add(balanceOfmVault());
-        return ret.add(prin);
+        return balanceOfWant().add(balanceOfmVault()).add(realizedReturn());
     }
 
     function balanceOfWant() public view returns (uint) {
@@ -229,6 +227,12 @@ contract Strategy is BaseStrategy {
         address urnHandler = ManagerLike(cdp_manager).urns(cdpId);
         (ink,) = VatLike(vat).urns(ilk, urnHandler);
         return ink;
+    }
+
+    function realizedReturn() internal view returns(uint _profit) {
+        uint v = getUnderlyingDai();
+        uint d = getTotalDebtAmount();
+        if (v > d) _profit = (v.sub(d)).mul(1e18).div(_getPrice());
     }
 
     function prepareReturn(uint256 _debtOutstanding) internal override returns (uint256 _profit) {
@@ -298,16 +302,16 @@ contract Strategy is BaseStrategy {
         _deposit();
     }
 
-    function shouldDraw() external view returns (bool) {
+    function shouldDraw() public view returns (bool) {
         // 5% buffer to avoid deposit/rebalance loops
-        return (getmVaultRatio(0) > c.mul(1e2).mul(c_base).div((c_base.sub(buffer))));
+        return (getmVaultRatio(0) > c.mul(1e2).mul(DENOMINATOR).div((DENOMINATOR.sub(buffer))));
     }
 
     function drawAmount() public view returns (uint) {
         uint _safe = c.mul(1e2);
         uint _current = getmVaultRatio(0);
-        if (_current > c_base.mul(c_safe).mul(1e2)) {
-            _current = c_base.mul(c_safe).mul(1e2);
+        if (_current > DENOMINATOR.mul(c_safe).mul(1e2)) {
+            _current = DENOMINATOR.mul(c_safe).mul(1e2);
         }
         if (_current > _safe) {
             uint d = getTotalDebtAmount();
@@ -325,9 +329,9 @@ contract Strategy is BaseStrategy {
         }
     }
 
-    function shouldRepay() external view returns (bool) {
+    function shouldRepay() public view returns (bool) {
         // 5% buffer to avoid deposit/rebalance loops
-        return (getmVaultRatio(0) < c.mul(1e2).mul(c_base).div((c_base.add(buffer))));
+        return (getmVaultRatio(0) < c.mul(1e2).mul(DENOMINATOR).div((DENOMINATOR.add(buffer))));
     }
     
     function repayAmount() public view returns (uint) {
@@ -349,7 +353,7 @@ contract Strategy is BaseStrategy {
     }
     
     function forceRebalance(uint _amount) external {
-        require(msg.sender == keeper || msg.sender == strategist || msg.sender == governance, "!authorized");
+        require(msg.sender == keeper || msg.sender == strategist || msg.sender == governance(), "!authorized");
         _freeWETHandWipeDAI(0, _withdrawDaiLeast(_amount));
     }
 
@@ -430,16 +434,6 @@ contract Strategy is BaseStrategy {
         path[1] = address(want);
 
         // approve unirouter to use dai
-        IUniswapV2Router02(unirouter).swapExactTokensForTokens(_amountIn, 0, path, address(this), now.add(1 days));
-    }
-
-    function setGovernance(address _governance) external {
-        require(msg.sender == governance, "!governance");
-        governance = _governance;
-    }
-
-    function setController(address _controller) external {
-        require(msg.sender == governance, "!governance");
-        controller = _controller;
+        Uni(unirouter).swapExactTokensForTokens(_amountIn, 0, path, address(this), now.add(1 days));
     }
 }
