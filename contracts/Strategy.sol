@@ -1,4 +1,5 @@
 pragma solidity ^0.6.12;
+pragma experimental ABIEncoderV2;
 
 import "@openzeppelinV3/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelinV3/contracts/math/SafeMath.sol";
@@ -6,13 +7,12 @@ import "@openzeppelinV3/contracts/utils/Address.sol";
 import "@openzeppelinV3/contracts/token/ERC20/SafeERC20.sol";
 
 import "../interfaces/maker/Maker.sol";
-import "../interfaces/UniswapInterfaces/IUniswapV2Router02.sol";
+import "../interfaces/UniswapInterfaces/Uni.sol";
 import "@yearnvaults/contracts/BaseStrategy.sol";
 
 
 interface yVault is VaultAPI {
     function pricePerShare() external view returns (uint);
-    function balanceOf(address) external view returns (uint);
     function deposit(uint) external returns (uint);
     function withdraw(uint) external returns (uint);
     
