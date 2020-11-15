@@ -19,7 +19,7 @@ interface yVault is VaultAPI {
 }
 
 
-contract StrategyMKRVaultDAIDelegate is BaseStrategy {
+contract Strategy is BaseStrategy {
     using SafeERC20 for IERC20;
     using Address for address;
     using SafeMath for uint256;
