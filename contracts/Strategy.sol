@@ -15,9 +15,21 @@ interface yVault is VaultAPI {
     function pricePerShare() external view returns (uint);
     function deposit(uint) external returns (uint);
     function withdraw(uint) external returns (uint);
-    
 }
 
+/* Need to override
+ * [V] name()
+ * [V] estimatedTotalAssets()
+ * [V] prepareReturn(uint256 _debtOutstanding)
+ * [V] adjustPosition(uint256 _debtOutstanding)
+ * [V] exitPosition()
+ * [V] distributeRewards(uint256 _shares)
+ * [V] tendTrigger(uint256 callCost)
+ * [V] harvestTrigger(uint256 callCost)
+ * [V] liquidatePosition(uint256 _amountNeeded)
+ * [V] prepareMigration(address _newStrategy)
+ * [V] protectedTokens()
+ */
 
 contract Strategy is BaseStrategy {
     using SafeERC20 for IERC20;
@@ -35,7 +47,7 @@ contract Strategy is BaseStrategy {
     address public jug = address(0x19c0976f590D67707E62397C87829d896Dc0f1F1);
 
     address public eth_price_oracle = address(0xCF63089A8aD2a9D8BD6Bb8022f3190EB7e1eD0f1);
-    address constant public yVaultDAI = address(0x9B142C2CDAb89941E9dcd0B6C1cf6dEa378A8D7C);
+    address constant public yVaultDAI = address(0x1b048bA60b02f36a7b48754f4edf7E1d9729eBc9);
 
     address constant public unirouter = address(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
 
@@ -100,10 +112,6 @@ contract Strategy is BaseStrategy {
         jug = _jug;
     }
 
-    /*
-     * Do anything necesseary to prepare this strategy for migration, such
-     * as transfering any reserve or LP tokens, CDPs, or other tokens or stores of value.
-     */
     function prepareMigration(address _newStrategy) internal override {
         allow(_newStrategy);
         IERC20(yVaultDAI).safeTransfer(_newStrategy, IERC20(yVaultDAI).balanceOf(address(this)));
@@ -204,9 +212,10 @@ contract Strategy is BaseStrategy {
         dart = uint(dart) <= art ? - dart : - toInt(art);
     }
 
-    function exitPosition() internal override {
+    function exitPosition() internal override returns (uint256 _loss, uint256 _debtPayment) {
         _withdrawAll();
         _swap(IERC20(dai).balanceOf(address(this)));
+        _debtPayment = IERC20(want).balanceOf(address(this));
     }
 
     function _withdrawAll() internal {
@@ -235,7 +244,14 @@ contract Strategy is BaseStrategy {
         if (v > d) _profit = (v.sub(d)).mul(1e18).div(_getPrice());
     }
 
-    function prepareReturn(uint256 _debtOutstanding) internal override returns (uint256 _profit) {
+    function prepareReturn(uint256 _debtOutstanding)
+        internal
+        override
+        returns (
+            uint256 _profit,
+            uint256 _loss,
+            uint256 _debtPayment
+        ) {
         _profit = IERC20(weth).balanceOf(address(this));
         uint v = getUnderlyingDai();
         uint d = getTotalDebtAmount();
@@ -244,9 +260,11 @@ contract Strategy is BaseStrategy {
             _swap(IERC20(dai).balanceOf(address(this)));
             
             _profit = IERC20(want).balanceOf(address(this));
+        }
 
-            if (_debtOutstanding > _profit) _profit.add(liquidatePosition(_debtOutstanding.sub(_profit)));
-        }    
+        if (_debtOutstanding > 0) {
+            _debtPayment = liquidatePosition(_debtOutstanding);
+        }
     }
 
     function tendTrigger(uint256 callCost) public override view returns (bool) {
@@ -292,8 +310,7 @@ contract Strategy is BaseStrategy {
         }
         
         _freeWETHandWipeDAI(_amountNeeded, _wipe);
-        
-        return _amountNeeded;
+        _amountFreed = _amountNeeded;
     }
 
     function adjustPosition(uint256 _debtOutstanding) internal override {
