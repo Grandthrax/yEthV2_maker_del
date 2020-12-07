@@ -22,7 +22,7 @@ interface yVault is VaultAPI {
  * [V] estimatedTotalAssets()
  * [V] prepareReturn(uint256 _debtOutstanding)
  * [V] adjustPosition(uint256 _debtOutstanding)
- * [V] exitPosition()
+ * [V] exitPosition(uint256 _debtOutstanding)
  * [V] distributeRewards(uint256 _shares)
  * [V] tendTrigger(uint256 callCost)
  * [V] harvestTrigger(uint256 callCost)
@@ -47,15 +47,14 @@ contract Strategy is BaseStrategy {
     address public jug = address(0x19c0976f590D67707E62397C87829d896Dc0f1F1);
 
     address public eth_price_oracle = address(0xCF63089A8aD2a9D8BD6Bb8022f3190EB7e1eD0f1);
-    address constant public yVaultDAI = address(0x1b048bA60b02f36a7b48754f4edf7E1d9729eBc9);
+    address constant public yvdai = address(0xBFa4D8AA6d8a379aBFe7793399D3DdaCC5bBECBB);
 
     address constant public unirouter = address(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
 
     // DEFAULT VALUE
-    // uint public minReportDelay = 6300;
-    // uint public profitFactor = 100;
-    // uint public debtThreshold = 0;
-    // uint private reserve = 0;
+    // uint256 public minReportDelay = 86400;
+    // uint256 public profitFactor = 100;
+    // uint256 public debtThreshold = 0;
 
     uint public c = 20000;
     uint public c_safe = 40000;
@@ -75,23 +74,19 @@ contract Strategy is BaseStrategy {
         return "StrategyMKRVaultDAIDelegate";
     }
 
-    function setBorrowCollateralizationRatio(uint _c) external {
-        require(msg.sender == governance(), "!governance");
+    function setBorrowCollateralizationRatio(uint _c) external onlyAuthorized {
         c = _c;
     }
 
-    function setWithdrawCollateralizationRatio(uint _c_safe) external {
-        require(msg.sender == governance(), "!governance");
+    function setWithdrawCollateralizationRatio(uint _c_safe) external onlyAuthorized {
         c_safe = _c_safe;
     }
 
-    function setBuffer(uint _buffer) external {
-        require(msg.sender == governance(), "!governance");
+    function setBuffer(uint _buffer) external onlyAuthorized {
         buffer = _buffer;
     }
 
-    function setOracle(address _oracle) external {
-        require(msg.sender == governance(), "!governance");
+    function setOracle(address _oracle) external onlyGovernance {
         eth_price_oracle = _oracle;
     }
 
@@ -102,8 +97,7 @@ contract Strategy is BaseStrategy {
         address _daiAdapter,
         address _spot,
         address _jug
-    ) external {
-        require(msg.sender == governance(), "!governance");
+    ) external onlyGovernance {
         cdp_manager = _manager;
         vat = ManagerLike(_manager).vat();
         mcd_join_eth_a = _ethAdapter;
@@ -114,11 +108,10 @@ contract Strategy is BaseStrategy {
 
     function prepareMigration(address _newStrategy) internal override {
         allow(_newStrategy);
-        IERC20(yVaultDAI).safeTransfer(_newStrategy, IERC20(yVaultDAI).balanceOf(address(this)));
+        IERC20(yvdai).safeTransfer(_newStrategy, IERC20(yvdai).balanceOf(address(this)));
     }
 
-    function allow(address dst) public {
-        require(msg.sender == governance(), "!governance");
+    function allow(address dst) public onlyAuthorized {
         ManagerLike(cdp_manager).cdpAllow(cdpId, dst, 1);
     }
 
@@ -126,20 +119,20 @@ contract Strategy is BaseStrategy {
         IERC20(want).approve(mcd_join_eth_a, uint(-1));
         IERC20(dai).approve(mcd_join_dai, uint(-1));
         VatLike(vat).hope(mcd_join_dai);
-        IERC20(dai).approve(yVaultDAI, uint(-1));
+        IERC20(dai).approve(yvdai, uint(-1));
         IERC20(dai).approve(unirouter, uint(-1));
     }
 
     function protectedTokens() internal override view returns (address[] memory) {
         address[] memory protected = new address[](2);
-        protected[0] = yVaultDAI;
+        protected[0] = yvdai;
         protected[1] = dai;
         return protected;
     }
 
-    function distributeRewards(uint256 _shares) external override {
-        // Send 100% of newly-minted shares to the strategist.
-        vault.transfer(strategist, _shares);
+    function distributeRewards() internal override {
+        // Transfer 100% of newly-minted shares awarded to this contract to the rewards address.
+        vault.transfer(rewards, vault.balanceOf(address(this)));
     }
 
     function _deposit() internal {
@@ -151,8 +144,8 @@ contract Strategy is BaseStrategy {
             require(_checkDebtCeiling(_draw), "debt ceiling is reached!");
             _lockWETHAndDrawDAI(_token, _draw);
 
-            // approve yVaultDAI use DAI
-            yVault(yVaultDAI).deposit(IERC20(dai).balanceOf(address(this)));
+            // approve yvdai use DAI
+            yVault(yvdai).deposit(IERC20(dai).balanceOf(address(this)));
         }
     }
 
@@ -212,14 +205,23 @@ contract Strategy is BaseStrategy {
         dart = uint(dart) <= art ? - dart : - toInt(art);
     }
 
-    function exitPosition() internal override returns (uint256 _loss, uint256 _debtPayment) {
+    function exitPosition(uint256 _debtOutstanding)
+        internal
+        override
+        returns (
+            uint256 _profit,
+            uint256 _loss,
+            uint256 _debtPayment
+        ) {
+        (_profit, _loss, _debtPayment) = prepareReturn(_debtOutstanding);
         _withdrawAll();
-        _swap(IERC20(dai).balanceOf(address(this)));
-        _debtPayment = IERC20(want).balanceOf(address(this));
+        uint _dai = IERC20(dai).balanceOf(address(this));
+        if (_dai > 0) _swap(_dai);
+        _debtPayment = _debtPayment.add(IERC20(want).balanceOf(address(this)));
     }
 
     function _withdrawAll() internal {
-        yVault(yVaultDAI).withdraw(IERC20(yVaultDAI).balanceOf(address(this))); // get Dai
+        yVault(yvdai).withdraw(IERC20(yvdai).balanceOf(address(this))); // get Dai
         _freeWETHandWipeDAI(balanceOfmVault(), getTotalDebtAmount().add(1)); // in case of edge case
     }
 
@@ -238,7 +240,7 @@ contract Strategy is BaseStrategy {
         return ink;
     }
 
-    function realizedReturn() internal view returns(uint _profit) {
+    function realizedReturn() public view returns(uint _profit) {
         uint v = getUnderlyingDai();
         uint d = getTotalDebtAmount();
         if (v > d) _profit = (v.sub(d)).mul(1e18).div(_getPrice());
@@ -276,15 +278,16 @@ contract Strategy is BaseStrategy {
     function harvestTrigger(uint256 callCost) public override view returns (bool) {
         StrategyParams memory params = vault.strategies(address(this));
 
-        // Should not trigger if strategy is not activated
+        // Should not trigger if Strategy is not activated
         if (params.activation == 0) return false;
 
-        // Should trigger if hadn't been called in a while
-        if (block.number.sub(params.lastReport) >= minReportDelay) return true;
+        // Should trigger if hasn't been called in a while
+        if (block.timestamp.sub(params.lastReport) >= minReportDelay) return true;
 
         // If some amount is owed, pay it back
-        // NOTE: Since debt is adjusted in step-wise fashion, it is appropiate to always trigger here,
-        //       because the resulting change should be large (might not always be the case)
+        // NOTE: Since debt is adjusted in step-wise fashion, it is appropriate
+        //       to always trigger here, because the resulting change should be
+        //       large (might not always be the case).
         uint256 outstanding = vault.debtOutstanding();
         if (outstanding > 0) return true;
 
@@ -296,9 +299,10 @@ contract Strategy is BaseStrategy {
         uint256 profit = 0;
         if (total > params.totalDebt) profit = total.sub(params.totalDebt); // We've earned a profit!
 
-        // Otherwise, only trigger if it "makes sense" economically (gas cost is <N% of value moved)
+        // Otherwise, only trigger if it "makes sense" economically (gas cost
+        // is <N% of value moved)
         uint256 credit = vault.creditAvailable();
-        return (profitFactor * callCost < credit.add(profit));
+        return (profitFactor.mul(callCost) < credit.add(profit));
     }
 
     function liquidatePosition(uint256 _amountNeeded) internal override returns (uint256 _amountFreed) {
@@ -342,7 +346,7 @@ contract Strategy is BaseStrategy {
         uint _drawD = drawAmount();
         if (_drawD > 0) {
             _lockWETHAndDrawDAI(0, _drawD);
-            yVault(yVaultDAI).deposit(IERC20(dai).balanceOf(address(this)));
+            yVault(yvdai).deposit(IERC20(dai).balanceOf(address(this)));
         }
     }
 
@@ -369,8 +373,7 @@ contract Strategy is BaseStrategy {
         }
     }
     
-    function forceRebalance(uint _amount) external {
-        require(msg.sender == keeper || msg.sender == strategist || msg.sender == governance(), "!authorized");
+    function forceRebalance(uint _amount) external onlyAuthorized {
         _freeWETHandWipeDAI(0, _withdrawDaiLeast(_amount));
     }
 
@@ -408,22 +411,22 @@ contract Strategy is BaseStrategy {
     }
 
     function getUnderlyingDai() public view returns (uint) {
-        return IERC20(yVaultDAI).balanceOf(address(this))
-                .mul(yVault(yVaultDAI).pricePerShare())
+        return IERC20(yvdai).balanceOf(address(this))
+                .mul(yVault(yvdai).pricePerShare())
                 .div(1e18);
     }
 
     function _withdrawDaiMost(uint _amount) internal returns (uint) {
         uint _shares = _amount
                         .mul(1e18)
-                        .div(yVault(yVaultDAI).pricePerShare());
+                        .div(yVault(yvdai).pricePerShare());
         
-        if (_shares > IERC20(yVaultDAI).balanceOf(address(this))) {
-            _shares = IERC20(yVaultDAI).balanceOf(address(this));
+        if (_shares > IERC20(yvdai).balanceOf(address(this))) {
+            _shares = IERC20(yvdai).balanceOf(address(this));
         }
 
         uint _before = IERC20(dai).balanceOf(address(this));
-        yVault(yVaultDAI).withdraw(_shares);
+        yVault(yvdai).withdraw(_shares);
         uint _after = IERC20(dai).balanceOf(address(this));
         return _after.sub(_before);
     }
@@ -431,16 +434,16 @@ contract Strategy is BaseStrategy {
     function _withdrawDaiLeast(uint _amount) internal returns (uint) {
         uint _shares = _amount
                         .mul(1e18)
-                        .div(yVault(yVaultDAI).pricePerShare())
+                        .div(yVault(yvdai).pricePerShare())
                         .mul(DENOMINATOR)
                         .div(DENOMINATOR.sub(buffer.div(10)));
 
-        if (_shares > IERC20(yVaultDAI).balanceOf(address(this))) {
-            _shares = IERC20(yVaultDAI).balanceOf(address(this));
+        if (_shares > IERC20(yvdai).balanceOf(address(this))) {
+            _shares = IERC20(yvdai).balanceOf(address(this));
         }
 
         uint _before = IERC20(dai).balanceOf(address(this));
-        yVault(yVaultDAI).withdraw(_shares);
+        yVault(yvdai).withdraw(_shares);
         uint _after = IERC20(dai).balanceOf(address(this));
         return _after.sub(_before);
     }
