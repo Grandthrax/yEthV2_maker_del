@@ -3,11 +3,12 @@ from brownie import Wei, config
 
 @pytest.fixture
 def live_dai_vault(Vault):
-    yield Vault.at('0x9B142C2CDAb89941E9dcd0B6C1cf6dEa378A8D7C')
+    yield Vault.at('0x1b048bA60b02f36a7b48754f4edf7E1d9729eBc9')
 
 @pytest.fixture
 def live_dai_strategy(Strategy):
-    yield Strategy.at('0x4C6e9d7E5d69429100Fcc8afB25Ea980065e2773')
+    # GenericLevCompFarm
+    yield Strategy.at('0x2D1b8C783646e146312D317E550EF80EC1Cb08C3')
 
 @pytest.fixture
 def vault(gov, rewards, guardian, currency, pm):
@@ -81,7 +82,6 @@ def strategy(strategist, keeper, vault, Strategy):
 
 @pytest.fixture
 def weth(interface):
-  
     yield interface.ERC20('0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2')
 
 @pytest.fixture
