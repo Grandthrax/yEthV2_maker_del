@@ -3,12 +3,12 @@ from brownie import Wei, config
 
 @pytest.fixture
 def live_dai_vault(Vault):
-    yield Vault.at('0x1b048bA60b02f36a7b48754f4edf7E1d9729eBc9')
+    yield Vault.at('0xBFa4D8AA6d8a379aBFe7793399D3DdaCC5bBECBB')
 
 @pytest.fixture
 def live_dai_strategy(Strategy):
     # GenericLevCompFarm
-    yield Strategy.at('0x2D1b8C783646e146312D317E550EF80EC1Cb08C3')
+    yield Strategy.at('0x5A9D49679319FCF3AcFe5559602Dbf31A221BaD6')
 
 @pytest.fixture
 def vault(gov, rewards, guardian, currency, pm):
@@ -41,7 +41,8 @@ def token(andre, Token):
 @pytest.fixture
 def gov(accounts):
     # yearn multis... I mean YFI governance. I swear!
-    yield accounts.at('0x846e211e8ba920b353fb717631c015cf04061cc9', force=True)
+    # yield accounts.at('0x846e211e8ba920b353fb717631c015cf04061cc9', force=True)
+    yield accounts.at('0xFEB4acf3df3cDEA7399794D0869ef76A6EfAff52', force=True)
 
 @pytest.fixture
 def rewards(gov):
@@ -86,14 +87,16 @@ def weth(interface):
 
 @pytest.fixture
 def dai(interface):
-    yield interface.ERC20('0x6b175474e89094c44da98b954eedeac495271d0f')
+    yield interface.ERC20('0x6B175474E89094C44Da98b954EedeAC495271d0F')
 
 @pytest.fixture
 def whale(accounts, history, web3):
     #big binance7 wallet
     #acc = accounts.at('0xBE0eB53F46cd790Cd13851d5EFf43D12404d33E8', force=True)
+
     #big binance8 wallet
     #acc = accounts.at('0xf977814e90da44bfa03b6295a0616a897441acec', force=True)
+
     #lots of weth account
-    acc = accounts.at('0x767Ecb395def19Ab8d1b2FCc89B3DDfBeD28fD6b', force=True)
+    acc = accounts.at('0xee2826453A4Fd5AfeB7ceffeEF3fFA2320081268', force=True)
     yield acc
