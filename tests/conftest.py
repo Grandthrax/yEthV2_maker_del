@@ -6,9 +6,13 @@ def live_dai_vault(Vault):
     yield Vault.at('0xBFa4D8AA6d8a379aBFe7793399D3DdaCC5bBECBB')
 
 @pytest.fixture
+def live_weth_vault(Vault):
+    yield Vault.at('0x6392e8fa0588CB2DCb7aF557FdC9D10FDe48A325')
+
+@pytest.fixture
 def live_dai_strategy(Strategy):
     # GenericLevCompFarm
-    yield Strategy.at('0x5A9D49679319FCF3AcFe5559602Dbf31A221BaD6')
+    yield Strategy.at('0x001F751cdfee02e2F0714831bE2f8384db0F71a2')
 
 @pytest.fixture
 def vault(gov, rewards, guardian, currency, pm):

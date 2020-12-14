@@ -10,52 +10,49 @@ import brownie
 #           - strategy operation at different loading levels (anticipated and "extreme")
 
 
+def test_weth_mkrdaidelegate(web3, chain, Vault, Strategy, GuestList, live_dai_vault, live_weth_vault, live_dai_strategy, whale, gov, dai, weth, samdev):
+    weth.approve(live_weth_vault, 2 ** 256 - 1, {"from": whale} )
 
-def test_weth_del(web3, chain, Vault, Strategy, live_dai_vault, live_dai_strategy, whale, gov, dai,weth, samdev):
-    live_strategy = live_dai_strategy
-    live_vault = live_dai_vault
+    # deploy weth strategy
+    strategy = samdev.deploy(Strategy, live_weth_vault)
+    print('cdp id: {}'.format(strategy.cdpId()))
+    print(f'type of strategy: {type(strategy)} @ {strategy}')
+    print(f'type of weth vault: {type(live_weth_vault)} @ {live_weth_vault}')
 
-    live_vault.setDepositLimit(1e28, {"from": gov})
-    live_vault.updateStrategyDebtLimit(live_strategy, 1e28, {"from": gov})
+    # activate the strategy from vault view
+    live_weth_vault.addStrategy(strategy, 2**256 - 1, 2**256 - 1, 1000, {"from": gov})
+    print(f'credit of strategy: {live_weth_vault.creditAvailable(strategy)}')
 
-    #increase balance of dai vault
-    
+    # start deposit
+    deposit_amount = Wei('10 ether')
+    live_weth_vault.deposit(deposit_amount, {"from": whale})
 
-    #deploy new strat
-    weth_vault = samdev.deploy(
-        Vault, weth, samdev, samdev, "", ""
-    )
-
-    weth.approve(weth_vault, 2 ** 256 - 1, {"from": whale} )
-
-    strategy = samdev.deploy(Strategy, weth_vault)
-
-    weth_vault.addStrategy(strategy, 2 ** 256 - 1, 2 ** 256 - 1, 50, {"from": samdev})
-
-    deposit_amount = Wei('100 ether')
-    weth_vault.deposit(deposit_amount, {"from": whale})
+    # let bouncer to put weth strategy in the yvdai guestlist
+    guest_list = GuestList.at(live_dai_vault.guestList())
+    print(f'yvdai guest list: {guest_list}')
+    guest_list.invite_guest(strategy, {'from': samdev})
+    print(f'successfully added: {guest_list.authorized(strategy, 1e18)}')
 
 
     print("\n******* Harvest Weth ******")
+    #print(f'price: {strategy._getPrice({"from": samdev})} ')
     strategy.harvest({'from': samdev})
 
     print("\n******* Weth ******")
-    genericStateOfStrat(strategy, weth, weth_vault)
-    genericStateOfVault(weth_vault, weth)
+    genericStateOfStrat(strategy, weth, live_weth_vault)
+    genericStateOfVault(live_weth_vault, weth)
     print("\n******* Dai ******")
-    genericStateOfStrat(live_strategy, dai, live_vault)
-    genericStateOfVault(live_vault, dai)
-
-
+    genericStateOfStrat(live_dai_strategy, dai, live_dai_vault)
+    genericStateOfVault(live_dai_vault, dai)
 
 
     print("\n******* Harvest Dai ******")
-    live_strategy.harvest({'from': samdev})
+    live_dai_strategy.harvest({'from': samdev})
 
     print("\n******* Weth ******")
-    genericStateOfStrat(strategy, weth, weth_vault)
-    genericStateOfVault(weth_vault, weth)
+    genericStateOfStrat(strategy, weth, live_weth_vault)
+    genericStateOfVault(live_weth_vault, weth)
     print("\n******* Dai ******")
-    genericStateOfStrat(live_strategy, dai, live_vault)
-    genericStateOfVault(live_vault, dai)
+    genericStateOfStrat(live_dai_strategy, dai, live_dai_vault)
+    genericStateOfVault(live_dai_vault, dai)
 
