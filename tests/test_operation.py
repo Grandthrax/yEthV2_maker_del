@@ -23,6 +23,9 @@ def test_weth_mkrdaidelegate(web3, chain, Vault, Strategy, GuestList, live_dai_v
     live_weth_vault.addStrategy(strategy, 2**256 - 1, 2**256 - 1, 1000, {"from": gov})
     print(f'credit of strategy: {live_weth_vault.creditAvailable(strategy)}')
 
+    # uplift the dai vault deposit limit for weth strategy
+    live_dai_vault.setDepositLimit(1_000_000*1e18, {'from': gov})
+
     # start deposit
     deposit_amount = Wei('10 ether')
     live_weth_vault.deposit(deposit_amount, {"from": whale})
