@@ -15,6 +15,10 @@ def live_dai_strategy(Strategy):
     yield Strategy.at('0x001F751cdfee02e2F0714831bE2f8384db0F71a2')
 
 @pytest.fixture
+def live_weth_strategy(Strategy):
+    yield Strategy.at('0x2476eC85e55625Eb658CAFAFe5fdc0FAE2954C85')
+
+@pytest.fixture
 def vault(gov, rewards, guardian, currency, pm):
     Vault = pm(config["dependencies"][0]).Vault
     vault = guardian.deploy(Vault, currency, gov, rewards, "", "")

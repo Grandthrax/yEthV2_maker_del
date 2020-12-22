@@ -59,3 +59,16 @@ def test_weth_mkrdaidelegate(web3, chain, Vault, Strategy, GuestList, live_dai_v
     genericStateOfStrat(live_dai_strategy, dai, live_dai_vault)
     genericStateOfVault(live_dai_vault, dai)
 
+    # withdraw weth
+    print()
+    print(f'whale\'s weth vault share: {live_weth_vault.balanceOf(whale)/1e18}')
+    live_weth_vault.withdraw(Wei('1 ether'), {"from": whale})
+    print(f'withdraw 1 ether done')
+    print(f'whale\'s weth vault share: {live_weth_vault.balanceOf(whale)/1e18}')
+
+    # withdraw all weth
+    print()
+    print(f'whale\'s weth vault share: {live_weth_vault.balanceOf(whale)/1e18}')
+    live_weth_vault.withdraw({"from": whale})
+    print(f'withdraw all weth')
+    print(f'whale\'s weth vault share: {live_weth_vault.balanceOf(whale)/1e18}')
